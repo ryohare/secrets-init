@@ -55,9 +55,6 @@ func main() {
 
 func mainCmd(c *cli.Context) error {
 	// Routine to reap zombies (it's the job of init)
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	// get provider
 	var provider secrets.Provider
@@ -65,21 +62,17 @@ func mainCmd(c *cli.Context) error {
 	if c.String("provider") == "aws" {
 		provider, err = aws.NewAwsSecretsProvider()
 	} else if c.String("provider") == "google" {
-		provider, err = google.NewGoogleSecretsProvider(ctx)
+		provider, err = google.NewGoogleSecretsProvider(nil)
 	}
 	if err != nil {
 		log.WithField("provider", c.String("provider")).WithError(err).Error("failed to initialize secrets provider")
 	}
 	// Launch main command
-	var mainRC int
-	err = run(ctx, provider, c.Args().Slice())
+	err = run(nil, provider, c.Args().Slice())
 	if err != nil {
 		log.WithError(err).Error("failed to run")
-		mainRC = 1
 	}
 
-	// Wait removeZombies goroutine
-	cleanQuit(cancel, &wg, mainRC)
 	return nil
 }
 
@@ -97,13 +90,12 @@ func run(ctx context.Context, provider secrets.Provider, filepathSlice []string)
 	var env []string
 	// set environment variables
 	if provider != nil {
-		env, err = provider.ResolveSecrets(ctx, os.Environ())
+		env, err = provider.ResolveSecrets(nil, os.Environ())
 		if err != nil {
 			log.WithError(err).Error("failed to resolve secrets")
 		}
 	} else {
 		log.Warn("no secrets provider available; using environment without resolving secrets")
-		env = os.Environ()
 	}
 
 	// write the envs into a soureable script
