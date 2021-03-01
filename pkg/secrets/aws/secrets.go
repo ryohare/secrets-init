@@ -76,7 +76,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 			}
 
 			for k, v := range entry {
-				env = k + "=" + v
+				env = strings.ToUpper(k) + "=" + v
 				envs = append(envs, env)
 			}
 
@@ -107,7 +107,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 				if strings.Contains(value, " ") {
 					value = fmt.Sprintf("\"%s\"", value)
 				}
-				env = name[1:] + "=" + value
+				env = strings.ToUpper(name[1:]) + "=" + value
 				envs = append(envs, env)
 			}
 		}
