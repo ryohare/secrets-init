@@ -13,6 +13,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// SSMEntry is a key,value pair from SSM
+type SSMEntry struct {
+	name  string
+	value string
+}
+
 // SecretsProvider AWS secrets provider
 type SecretsProvider struct {
 	session *session.Session
@@ -50,7 +56,20 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 			if err != nil {
 				return vars, errors.Wrap(err, "failed to get secret from AWS Secrets Manager")
 			}
+
+			/*
+				{
+					ARN: "arn:aws:secretsmanager:us-east-1:12345678901:secret:webserver/truck-J69aL7",
+					CreatedDate: 2021-02-26 19:24:56 +0000 UTC,
+					Name: "webserver/truck",
+					SecretString: "{\"truck\":\"chevy\"}",
+					VersionId: "7b3a6445-4278-4691-bd5e-0fcc2a87b297",
+					VersionStages: ["AWSCURRENT"]
+				}
+			*/
+
 			env = key + "=" + *secret.SecretString
+			envs = append(envs, env)
 		} else if strings.HasPrefix(value, "arn:aws:ssm") && strings.Contains(value, ":parameter/") {
 			tokens := strings.Split(value, ":")
 			// valid parameter ARN arn:aws:ssm:REGION:ACCOUNT:parameter/PATH
@@ -73,9 +92,9 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 					return vars, errors.Wrap(err, "failed to get secret from AWS Parameters Store")
 				}
 				env = key + "=" + *param.Parameter.Value
+				envs = append(envs, env)
 			}
 		}
-		envs = append(envs, env)
 	}
 
 	return envs, nil

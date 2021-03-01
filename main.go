@@ -4,19 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"os/signal"
 	"runtime"
 	"secrets-init/pkg/secrets"
 	"secrets-init/pkg/secrets/aws"
 	"secrets-init/pkg/secrets/google"
 	"sync"
-	"syscall"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -63,7 +58,6 @@ func mainCmd(c *cli.Context) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go removeZombies(ctx, &wg)
 
 	// get provider
 	var provider secrets.Provider
@@ -89,111 +83,48 @@ func mainCmd(c *cli.Context) error {
 	return nil
 }
 
-func removeZombies(ctx context.Context, wg *sync.WaitGroup) {
-	for {
-		var status syscall.WaitStatus
-
-		// wait for an orphaned zombie process
-		pid, _ := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
-
-		if pid <= 0 {
-			// PID is 0 or -1 if no child waiting, so we wait for 1 second for next check
-			time.Sleep(1 * time.Second)
-		} else {
-			// PID is > 0 if a child was reaped and we immediately check if another one is waiting
-			continue
-		}
-
-		// non-blocking test if context is done
-		select {
-		case <-ctx.Done():
-			// context is done, so we stop goroutine
-			wg.Done()
-			return
-		default:
-		}
-	}
-}
-
 // run passed command
-func run(ctx context.Context, provider secrets.Provider, commandSlice []string) error {
-	var commandStr string
-	var argsSlice []string
-
-	if len(commandSlice) == 0 {
-		log.Warn("no command specified")
+func run(ctx context.Context, provider secrets.Provider, filepathSlice []string) error {
+	if len(filepathSlice) == 0 {
+		log.Warn("no file path specified")
 		return nil
 	}
 
 	// split command and arguments
-	commandStr = commandSlice[0]
-	// if there is args
-	if len(commandSlice) > 1 {
-		argsSlice = commandSlice[1:]
-	}
-
-	// register a channel to receive system signals
-	sigs := make(chan os.Signal, 1)
-	defer close(sigs)
-	signal.Notify(sigs)
-	defer signal.Reset()
-
-	// define a command and rebind its stdout and stdin
-	cmd := exec.Command(commandStr, argsSlice...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	// create a dedicated pidgroup used to forward signals to the main process and its children
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	pathStr := filepathSlice[0]
 
 	var err error
+	var env []string
 	// set environment variables
 	if provider != nil {
-		cmd.Env, err = provider.ResolveSecrets(ctx, os.Environ())
+		env, err = provider.ResolveSecrets(ctx, os.Environ())
 		if err != nil {
 			log.WithError(err).Error("failed to resolve secrets")
 		}
 	} else {
 		log.Warn("no secrets provider available; using environment without resolving secrets")
-		cmd.Env = os.Environ()
+		env = os.Environ()
 	}
 
-	// start the specified command
-	log.WithFields(log.Fields{
-		"command": commandStr,
-		"args":    argsSlice,
-		"env":     cmd.Env,
-	}).Debug("starting command")
-	err = cmd.Start()
+	// write the envs into a soureable script
+	f, err := os.OpenFile(pathStr, os.O_CREATE|os.O_WRONLY, 0644)
+
 	if err != nil {
-		log.WithError(err).Error("failed to start command")
-		return err
+		log.Errorf("Could not open output file because %s", err.Error())
+		os.Exit(7)
+	}
+	defer f.Close()
+
+	fileTemplate := `#!/bin/sh`
+
+	for _, e := range env {
+		fileTemplate = fmt.Sprintf("%s\nexport %s;", fileTemplate, e)
 	}
 
-	// Goroutine for signals forwarding
-	go func() {
-		for sig := range sigs {
-			// ignore SIGCHLD signals since these are only useful for secrets-init
-			if sig != syscall.SIGCHLD {
-				// forward signal to the main process and its children
-				e := syscall.Kill(-cmd.Process.Pid, sig.(syscall.Signal))
-				if e != nil {
-					log.WithFields(log.Fields{
-						"pid":    cmd.Process.Pid,
-						"path":   cmd.Path,
-						"args":   cmd.Args,
-						"signal": unix.SignalName(sig.(syscall.Signal)),
-					}).WithError(e).Error("failed to send system signal to the process")
-				}
-			}
-		}
-	}()
+	// add the self-destruction
+	// fileTemplate = fmt.Sprintf("%s\nrm -- \"$0\"\n", fileTemplate)
 
-	// wait for the command to exit
-	err = cmd.Wait()
-	if err != nil {
-		log.WithError(err).Error("failed to wait for command to complete")
-		return err
-	}
+	f.WriteString(fileTemplate)
 
 	return nil
 }
