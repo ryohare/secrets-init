@@ -79,18 +79,11 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 				if err != nil {
 					return vars, errors.Wrap(err, "failed to get secret from AWS Parameters Store")
 				}
-				// var entry map[string]string
-				// json.Unmarshal([]byte(*param.Parameter.Value), &entry)
-
-				// for _, v := range entry {
 				name := *param.Parameter.Name
-
 				env = name[1:] + "=" + *param.Parameter.Value
-				// }
 			}
 		}
 		envs = append(envs, env)
 	}
-
 	return envs, nil
 }
