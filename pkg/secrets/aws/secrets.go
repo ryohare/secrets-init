@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"secrets-init/pkg/secrets"
 	"strings"
 
@@ -50,7 +51,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 
 	for _, env := range vars {
 		kv := strings.Split(env, "=")
-		key, value := kv[0], kv[1]
+		_, value := kv[0], kv[1]
 		if strings.HasPrefix(value, "arn:aws:secretsmanager") {
 			// get secret value
 			secret, err := sp.sm.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: &value})
@@ -100,7 +101,13 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 				if err != nil {
 					return vars, errors.Wrap(err, "failed to get secret from AWS Parameters Store")
 				}
-				env = key + "=" + *param.Parameter.Value
+				name := *param.Parameter.Name
+				value := *param.Parameter.Value
+
+				if strings.Contains(value, " ") {
+					value = fmt.Sprintf("\"%s\"", value)
+				}
+				env = name[1:] + "=" + value
 				envs = append(envs, env)
 			}
 		}
