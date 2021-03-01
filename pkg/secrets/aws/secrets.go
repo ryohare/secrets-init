@@ -56,7 +56,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 			json.Unmarshal([]byte(*secret.SecretString), &entry)
 
 			for k, v := range entry {
-				env = k + "=" + v
+				env = strings.ToUpper(k) + "=" + v
 			}
 		} else if strings.HasPrefix(value, "arn:aws:ssm") && strings.Contains(value, ":parameter/") {
 			tokens := strings.Split(value, ":")
@@ -80,7 +80,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 					return vars, errors.Wrap(err, "failed to get secret from AWS Parameters Store")
 				}
 				name := *param.Parameter.Name
-				env = name[1:] + "=" + *param.Parameter.Value
+				env = strings.ToUpper(name[1:]) + "=" + *param.Parameter.Value
 			}
 		}
 		envs = append(envs, env)
