@@ -46,7 +46,7 @@ export api=key-123456789
 
 ## Requirement
 
-#### AWS
+### AWS
 
 In order to resolve AWS secrets from AWS Secrets Manager and Parameter Store, `secrets-init` should run under IAM role that has permission to access desired secrets.
 
