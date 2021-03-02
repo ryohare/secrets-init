@@ -1,14 +1,9 @@
-[![Build Status](https://github.com/doitintl/secrets-init/workflows/goreleaser/badge.svg)](https://github.com/doitintl/secrets-init/actions?query=workflow%3Agoreleaser) [![Go Report Card](https://goreportcard.com/badge/github.com/doitintl/secrets-init)](https://goreportcard.com/report/github.com/doitintl/secrets-init)
-
-[![](https://images.microbadger.com/badges/image/doitintl/secrets-init.svg)](http://microbadger.com/images/doitintl/secrets-init) [![](https://images.microbadger.com/badges/version/doitintl/secrets-init.svg)](http://microbadger.com/images/doitintl/secrets-init) [![](https://images.microbadger.com/badges/commit/doitintl/secrets-init.svg)](http://microbadger.com/images/doitintl/secrets-init)
-
 # secrets-init
 
 `secrets-init` is a minimalistic init system designed to run as PID 1 inside container environments, similar to [dumb-init](https://github.com/Yelp/dumb-init), integrated with multiple secrets manager services:
 
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
 - [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html)
-- [Google Secret Manager](https://cloud.google.com/secret-manager/docs/)
 
 ## Why you need an init system
 
@@ -27,7 +22,7 @@ Summary:
 
 ### Integration with AWS Secrets Manager
 
-User can put AWS secret ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced secret value.
+User can put AWS secret ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced secret value and assign the value to an environment variable that is the name in parameter store for the value. The environment variable used to supply ARN is disreguarded.
 
 ```sh
 # environment variable passed to `secrets-init`
@@ -41,7 +36,7 @@ MY_DB_PASSWORD=very-secret-password
 
 It is possible to use AWS Systems Manager Parameter Store to store application parameters and secrets.
 
-User can put AWS Parameter Store ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced parameter value.
+User can put AWS Parameter Store ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced parameter value and assign the value to an environment variable that is the name in parameter store for the value. The environment variable used to supply ARN is disreguarded.
 
 ```sh
 # environment variable passed to `secrets-init`
@@ -67,6 +62,22 @@ MY_DB_PASSWORD=gcp:secretmanager:projects/$PROJECT_ID/secrets/mydbpassword/versi
 MY_DB_PASSWORD=very-secret-password
 ```
 
+### Building
+#### Locally
+`secrets-init` requires golang > 11 installed locally to compile. This can be done with `make` and the binary will be generated in `.bin/secrets-init`.
+```bash
+make
+
+.bin/secrets-init -v
+```
+#### Docker
+`secrets-init` can be built and ran in docker. This can be done with `make docker` and the output binary in the image `secrets-init`.
+```bash
+make docker
+
+docker run -it --rm secrets-init
+```
+
 ### Requirement
 
 #### AWS
@@ -74,12 +85,6 @@ MY_DB_PASSWORD=very-secret-password
 In order to resolve AWS secrets from AWS Secrets Manager and Parameter Store, `secrets-init` should run under IAM role that has permission to access desired secrets.
 
 This can be achieved by assigning IAM Role to Kubernetes Pod or ECS Task. It's possible to assign IAM Role to EC2 instance, where container is running, but this option is less secure.
-
-#### Google Cloud
-
-In order to resolve Google secrets from Google Secret Manager, `secrets-init` should run under IAM role that has permission to access desired secrets.
-
-This can be achieved by assigning IAM Role to Kubernetes Pod with [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity). It's possible to assign IAM Role to GCE instance, where container is running, but this option is less secure.
 
 ## Kubernetes `secrets-init` admission webhook
 
