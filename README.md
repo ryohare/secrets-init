@@ -44,6 +44,22 @@ cat sourcefile.sh
 export api=key-123456789
 ```
 
+## Building
+### Local
+Local building requires go >= 11 installed. To build locally, run `make` and the binary will go to `.bin/secrets-init`
+```bash
+make
+
+.bin/secrets-init -v
+```
+### Docker
+Docker can be used to build and to run the binary. Run `make docker` to make the docker image.
+```bash
+make docker
+
+docker run -it --rm secrets-init
+```
+
 ## Requirement
 
 ### AWS

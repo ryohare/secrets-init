@@ -28,6 +28,8 @@ all: fmt lint test | $(BIN) ; $(info $(M) building executable…) @ ## Build pro
 		-ldflags '-X main.Version=$(VERSION) -X main.BuildDate=$(DATE)' \
 		-o $(BIN)/$(basename $(MODULE)) main.go
 
+docker:
+	docker build -t secrets-init .
 # Tools
 
 $(BIN):
