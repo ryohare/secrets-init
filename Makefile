@@ -29,7 +29,7 @@ all: fmt lint test | $(BIN) ; $(info $(M) building executable…) @ ## Build pro
 		-o $(BIN)/$(basename $(MODULE)) main.go
 
 docker:
-	docker build -t secrets-init .
+	docker build -t secrets-init-source .
 # Tools
 
 $(BIN):
