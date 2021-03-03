@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
-	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 // SSMEntry is a key,value pair from SSM
@@ -56,7 +56,10 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 			// get secret value
 			secret, err := sp.sm.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: &value})
 			if err != nil {
-				return envs, errors.Wrap(err, "failed to get secret from AWS Secrets Manager")
+				log.Errorf(
+					"failed to get secret from AWS Secrets Manager for arn %s because %s", value, err.Error(),
+				)
+				continue
 			}
 
 			/*
@@ -72,7 +75,10 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 			var entry map[string]string
 			err = json.Unmarshal([]byte(*secret.SecretString), &entry)
 			if err != nil {
-				return envs, errors.Wrap(err, "failed to unmarshal json from AWS Secrets Manager")
+				log.Errorf(
+					"failed to unmarshal json from AWS Secrets Manager for arn %s because %s", value, err.Error(),
+				)
+				continue
 			}
 
 			for k, v := range entry {
@@ -99,7 +105,10 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 					WithDecryption: &withDecryption,
 				})
 				if err != nil {
-					return vars, errors.Wrap(err, "failed to get secret from AWS Parameters Store")
+					log.Errorf(
+						"failed to get secret from AWS Parameters Store for arn %s because %s", value, err.Error(),
+					)
+					continue
 				}
 				name := *param.Parameter.Name
 				value := *param.Parameter.Value
