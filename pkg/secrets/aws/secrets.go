@@ -51,7 +51,7 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 
 	for _, env := range vars {
 		kv := strings.Split(env, "=")
-		_, value := kv[0], kv[1]
+		envarName, value := kv[0], kv[1]
 		if strings.HasPrefix(value, "arn:aws:secretsmanager") {
 			// get secret value
 			secret, err := sp.sm.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: &value})
@@ -68,21 +68,31 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 					CreatedDate: 2021-02-26 19:24:56 +0000 UTC,
 					Name: "webserver/truck",
 					SecretString: "{\"truck\":\"chevy\"}",
+					OR
+					SecretString: "chevy",
 					VersionId: "7b3a6445-4278-4691-bd5e-0fcc2a87b297",
 					VersionStages: ["AWSCURRENT"]
 				}
 			*/
 			var entry map[string]string
-			err = json.Unmarshal([]byte(*secret.SecretString), &entry)
-			if err != nil {
-				log.Errorf(
-					"failed to unmarshal json from AWS Secrets Manager for arn %s because %s", value, err.Error(),
-				)
-				continue
-			}
 
-			for k, v := range entry {
-				env = strings.ToUpper(k) + "=" + v
+			// test if the SecretString is JSON or plaintext
+			if strings.Contains(*secret.SecretString, "{") {
+				err = json.Unmarshal([]byte(*secret.SecretString), &entry)
+				if err != nil {
+					log.Errorf(
+						"failed to unmarshal json from AWS Secrets Manager for arn %s because %s", value, err.Error(),
+					)
+					continue
+				}
+
+				for k, v := range entry {
+					env = strings.ToUpper(k) + "=" + v
+					envs = append(envs, env)
+				}
+			} else {
+				secret := *secret.SecretString
+				env = envarName + "=" + secret
 				envs = append(envs, env)
 			}
 

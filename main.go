@@ -33,6 +33,11 @@ func main() {
 				Usage: "supported secrets manager provider ['aws', 'google']",
 				Value: "aws",
 			},
+			&cli.StringFlag{
+				Name:     "ini, i",
+				Usage:    "ini file to read and annotate with secrets",
+				Required: false,
+			},
 		},
 		Name:    "secrets-init",
 		Usage:   "enrich environment variables with secrets from secret manager",

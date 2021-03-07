@@ -10,6 +10,11 @@
 secrets-init <script-to-generate>
 ```
 
+## Secrets EnvVar Names
+For key value pairs in the secrets manager, the environment variables are set in the form `KEY=value`, ignoring the environment variables used to pass the arns to the application.
+
+For plaint text secrets, the environment variables used to pass the arns are used to hold the secret value.
+
 ## Integration with AWS Secrets Manager
 
 User can put AWS secret ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced secret value and set an environment variable whos name maps to the name associated with the value in AWS. It will map the AWS Parameter Store name to the value in the source file.
