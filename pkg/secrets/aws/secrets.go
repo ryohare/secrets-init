@@ -46,12 +46,11 @@ func NewAwsSecretsProvider() (secrets.Provider, error) {
 
 // ResolveSecrets replaces all passed variables values prefixed with 'aws:aws:secretsmanager' and 'arn:aws:ssm:REGION:ACCOUNT:parameter'
 // by corresponding secrets from AWS Secret Manager and AWS Parameter Store
-func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([]string, error) {
-	var envs []string
-
+func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([]secrets.Secret, error) {
+	var secretList []secrets.Secret
 	for _, env := range vars {
 		kv := strings.Split(env, "=")
-		envarName, value := kv[0], kv[1]
+		arnVarName, value := kv[0], kv[1]
 		if strings.HasPrefix(value, "arn:aws:secretsmanager") {
 			// get secret value
 			secret, err := sp.sm.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: &value})
@@ -86,14 +85,39 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 					continue
 				}
 
+				var kvs []secrets.KeyValue
 				for k, v := range entry {
-					env = strings.ToUpper(k) + "=" + v
-					envs = append(envs, env)
+					kvs = append(kvs,
+						secrets.KeyValue{
+							Value: v,
+							Key:   k,
+						},
+					)
 				}
+				secretList = append(secretList,
+					secrets.Secret{
+						KeyValues:  kvs,
+						Arn:        value,
+						ArnVarName: arnVarName,
+						Format:     secrets.KeyValueFormat,
+					})
+
 			} else {
-				secret := *secret.SecretString
-				env = envarName + "=" + secret
-				envs = append(envs, env)
+				secretString := *secret.SecretString
+				var kvs = []secrets.KeyValue{
+					secrets.KeyValue{
+						Value: secretString,
+						Key:   *secret.Name,
+					},
+				}
+
+				secretList = append(secretList,
+					secrets.Secret{
+						KeyValues:  kvs,
+						Arn:        value,
+						ArnVarName: arnVarName,
+						Format:     secrets.PlainTextFormat,
+					})
 			}
 
 		} else if strings.HasPrefix(value, "arn:aws:ssm") && strings.Contains(value, ":parameter/") {
@@ -126,11 +150,25 @@ func (sp *SecretsProvider) ResolveSecrets(ctx context.Context, vars []string) ([
 				if strings.Contains(value, " ") {
 					value = fmt.Sprintf("\"%s\"", value)
 				}
-				env = strings.ToUpper(name[1:]) + "=" + value
-				envs = append(envs, env)
+
+				var kvs = []secrets.KeyValue{
+					secrets.KeyValue{
+						Value: value,
+						Key:   name,
+					},
+				}
+
+				secretList = append(secretList,
+					secrets.Secret{
+						KeyValues:  kvs,
+						Arn:        value,
+						ArnVarName: arnVarName,
+						Format:     secrets.PlainTextFormat,
+					},
+				)
 			}
 		}
 	}
 
-	return envs, nil
+	return secretList, nil
 }

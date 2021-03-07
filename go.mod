@@ -12,4 +12,5 @@ require (
 	github.com/urfave/cli/v2 v2.0.0
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
 	google.golang.org/genproto v0.0.0-20200331122359-1ee6d9798940
+	gopkg.in/ini.v1 v1.62.0 // indirect
 )

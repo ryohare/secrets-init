@@ -35,8 +35,8 @@ ecrlogin:
 	aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 664393803520.dkr.ecr.us-east-1.amazonaws.com
 
 eks: ecrlogin docker
-	docker tag secrets-init-source 664393803520.dkr.ecr.us-east-1.amazonaws.com/secrets-init-source ; 
-	docker push 664393803520.dkr.ecr.us-east-1.amazonaws.com/secrets-init-source
+	docker tag secrets-init-source 664393803520.dkr.ecr.us-east-1.amazonaws.com/secrets-init-source:2 ; 
+	docker push 664393803520.dkr.ecr.us-east-1.amazonaws.com/secrets-init-source:2
 
 # Tools
 

@@ -7,11 +7,12 @@ import (
 	"runtime"
 	"secrets-init/pkg/secrets"
 	"secrets-init/pkg/secrets/aws"
-	"secrets-init/pkg/secrets/google"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/ini.v1"
 )
 
 var (
@@ -30,7 +31,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "provider, p",
-				Usage: "supported secrets manager provider ['aws', 'google']",
+				Usage: "supported secrets manager provider ['aws']",
 				Value: "aws",
 			},
 			&cli.StringFlag{
@@ -66,8 +67,6 @@ func mainCmd(c *cli.Context) error {
 	var err error
 	if c.String("provider") == "aws" {
 		provider, err = aws.NewAwsSecretsProvider()
-	} else if c.String("provider") == "google" {
-		provider, err = google.NewGoogleSecretsProvider(nil)
 	}
 	if err != nil {
 		log.WithField("provider", c.String("provider")).WithError(err).Error("failed to initialize secrets provider")
@@ -91,11 +90,45 @@ func run(ctx context.Context, provider secrets.Provider, filepathSlice []string)
 	// split command and arguments
 	pathStr := filepathSlice[0]
 
+	iniMode := false
+	if strings.Contains(pathStr, ".ini") {
+		iniMode = true
+	}
+
 	var err error
 	var env []string
+	var cfg *ini.File
+	sectionToKeyMap := make(map[string]string)
+	if iniMode {
+		cfg, err = ini.Load(pathStr)
+
+		if err != nil {
+			log.WithError(err).Error("Could not read specified ini file")
+			os.Exit(5)
+		}
+
+		for _, s := range cfg.SectionStrings() {
+			sec, err := cfg.GetSection(s)
+			if err != nil {
+				log.WithError(err).Error("Could not get section")
+				continue
+			}
+
+			for _, k := range sec.KeyStrings() {
+				key, _ := sec.GetKey(k)
+				//fmt.Printf("%s=%s\n", key.Name(), key.String())
+				env = append(env, fmt.Sprintf("%s=%s", key.Name(), key.String()))
+				sectionToKeyMap[key.Name()] = sec.Name()
+			}
+		}
+	} else {
+		env = os.Environ()
+	}
+
 	// set environment variables
+	var secs []secrets.Secret
 	if provider != nil {
-		env, err = provider.ResolveSecrets(nil, os.Environ())
+		secs, err = provider.ResolveSecrets(nil, env)
 		if err != nil {
 			log.WithError(err).Error("failed to resolve secrets")
 		}
@@ -103,26 +136,47 @@ func run(ctx context.Context, provider secrets.Provider, filepathSlice []string)
 		log.Warn("no secrets provider available; using environment without resolving secrets")
 	}
 
-	// write the envs into a soureable script
-	f, err := os.OpenFile(pathStr, os.O_CREATE|os.O_WRONLY, 0644)
+	if iniMode {
+		for _, s := range secs {
+			if s.Format == secrets.KeyValueFormat {
+				log.Errorf("Secret %s is not plaintext format. Cannot load", s.Arn)
+				continue
+			}
+			section, err := cfg.GetSection(sectionToKeyMap[s.ArnVarName])
+			if err != nil {
+				log.WithError(err).Error("Failed to get section to write out secret")
+				continue
+			}
+			key, err := section.GetKey(s.ArnVarName)
+			if err != nil {
+				log.WithError(err).Error("Failed to get key to write out secret")
+				continue
+			}
+			key.SetValue(s.KeyValues[0].Value)
+		}
+		cfg.SaveTo(pathStr)
+	} else {
 
-	if err != nil {
-		log.Errorf("Could not open output file because %s", err.Error())
-		os.Exit(7)
+		// env file writing mode
+		f, err := os.OpenFile(pathStr, os.O_CREATE|os.O_WRONLY, 0644)
+
+		if err != nil {
+			log.Errorf("Could not open output file because %s", err.Error())
+			os.Exit(7)
+		}
+		defer f.Close()
+
+		fileTemplate := `#!/bin/sh`
+
+		for _, e := range secs {
+			for _, s := range e.GetKeyValueStrings() {
+				fileTemplate = fmt.Sprintf("%s\nexport %s;", fileTemplate, s)
+			}
+		}
+
+		f.WriteString(fileTemplate)
+
 	}
-	defer f.Close()
-
-	fileTemplate := `#!/bin/sh`
-
-	for _, e := range env {
-		fileTemplate = fmt.Sprintf("%s\nexport %s;", fileTemplate, e)
-	}
-
-	// add the self-destruction
-	// fileTemplate = fmt.Sprintf("%s\nrm -- \"$0\"\n", fileTemplate)
-
-	f.WriteString(fileTemplate)
-
 	return nil
 }
 
